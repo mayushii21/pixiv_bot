@@ -1,8 +1,9 @@
+import asyncio
 import json
 import os
 import sqlite3
 
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 
 # Create necessary requests.get kwargs
@@ -45,12 +46,16 @@ id_set = {
 }
 
 
-def get_top_ranked(kws):
+async def get_top_ranked(session, kws):
     # Request and parse the web page
-    r = requests.get(
-        "https://www.pixiv.net/ranking.php?mode=daily&content=illust", **kws
-    )
-    soup = BeautifulSoup(r.text, "lxml")
+    async with session.get(
+        "https://www.pixiv.net/ranking.php?mode=daily&content=illust",
+        headers=kws["headers"],
+        params=kws["params"],
+    ) as response:
+        response_text = await response.text()
+
+    soup = BeautifulSoup(response_text, "lxml")
 
     # Obtain top 50 id's
     matches = soup.find_all("section", class_="ranking-item")
@@ -60,30 +65,15 @@ def get_top_ranked(kws):
     return new_ids, kws
 
 
-def create_payload(ids, kws):
-    payload = []
-    nsfw_ids = set()
-    for i, id in enumerate(ids):
-        print(i)
-        # Skip sensitive (nsfw) content
-        try:
-            data = get_img_data(id, kws)
-            if data["tags"] & blacklist:
-                nsfw_ids.add(id)
-                print("nsfw tag")
-                continue
-            payload.append(data)
-        except Exception:
-            print("nsfw exception")
-            nsfw_ids.add(id)
-            continue
-    return payload, ids, nsfw_ids
+async def get_img_data(session, id, kws):
+    async with session.get(
+        "https://www.pixiv.net/en/artworks/" + id,
+        headers=kws["headers"],
+        params=kws["params"],
+    ) as response:
+        response_text = await response.text()
 
-
-def get_img_data(id, kws):
-    r = requests.get("https://www.pixiv.net/en/artworks/" + id, **kws)
-    soup = BeautifulSoup(r.text, "lxml")
-
+    soup = BeautifulSoup(response_text, "lxml")
     match = soup.find("meta", id="meta-preload-data")
 
     img_data = json.loads(match["content"])["illust"][id]
@@ -119,9 +109,26 @@ def get_img_data(id, kws):
     return payload
 
 
-def send_payload(payload, ids, nsfw_ids):
-    print(payload)
-    populate_w_ids(ids, nsfw_ids)
+async def create_payload(kws):
+    async with aiohttp.ClientSession() as session:
+        ids, kws = await get_top_ranked(session, kws)
+        payload = []
+        nsfw_ids = set()
+        for i, id in enumerate(ids):
+            print(i)
+            # Skip sensitive (nsfw) content
+            try:
+                data = await get_img_data(session, id, kws)
+                if data["tags"] & blacklist:
+                    nsfw_ids.add(id)
+                    print("nsfw tag")
+                    continue
+                payload.append(data)
+            except Exception:
+                print("nsfw exception")
+                nsfw_ids.add(id)
+                continue
+    return payload, ids, nsfw_ids
 
 
 def populate_w_ids(total_new_ids, nsfw_ids):
@@ -147,7 +154,12 @@ def populate_w_ids(total_new_ids, nsfw_ids):
     id_set.update(total_new_ids)
 
 
-send_payload(*create_payload(*get_top_ranked(get_kws)))
+async def send_payload(kws):
+    payload, ids, nsfw_ids = await create_payload(kws)
+    print(payload)
+    populate_w_ids(ids, nsfw_ids)
+    return payload
+
 
 # tags_url = 'https://www.pixiv.net/en/artworks/111620869'
 
@@ -170,3 +182,6 @@ send_payload(*create_payload(*get_top_ranked(get_kws)))
 #        tags.append('#' + tag['tag'].replace(' ', '_'))
 
 # print(tags)
+
+if __name__ == "__main__":
+    asyncio.run(send_payload(get_kws))
