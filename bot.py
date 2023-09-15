@@ -5,9 +5,10 @@ import os
 import dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters.command import Command
 
-from dev import send_payload
+from dev import create_payload, populate_w_ids
 
 # Initialize the logger and load the .env file
 logging.basicConfig(level=logging.INFO)
@@ -29,14 +30,28 @@ async def cmd_start(message: types.Message):
 
 # /get command
 @dp.message(Command("get"))
-async def get_top_ranked(message: types.Message):
-    for item in await send_payload():
-        url = item["img_url"]
-        await message.answer_photo(
-            photo=url,
-            caption=f"<a href='{item['page_url']}'>{item['title']}</a>\nAuthor: <a href='{item['author_url']}'>{item['author']}</a>\nTags: {item['tags']}",
-        )
-        await message.answer_document(document=url)
+async def send_payload(message: types.Message):
+    payload, new_sfw_ids, nsfw_ids = await create_payload()
+    sent_sfw_ids = set()
+    tries = 0
+    while new_sfw_ids and tries < 3:
+        for item in payload:
+            if item["artwork_id"] in sent_sfw_ids:
+                continue
+            url = item["img_url"]
+            try:
+                await message.answer_photo(
+                    photo=url,
+                    caption=f"<a href='{item['page_url']}'>{item['title']}</a>\nAuthor: <a href='{item['author_url']}'>{item['author']}</a>\nTags: {item['tags']}",
+                )
+                await message.answer_document(document=url)
+                sent_sfw_ids.add(item["artwork_id"])
+            except TelegramBadRequest:
+                pass
+        tries += 1
+        new_sfw_ids.difference_update(sent_sfw_ids)
+
+    populate_w_ids(sent_sfw_ids, nsfw_ids)
 
 
 async def main():

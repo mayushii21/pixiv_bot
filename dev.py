@@ -134,6 +134,7 @@ async def get_img_data(session, artwork_id, kws):
         "tags": " ".join(tags),
         # "img": await get_img(session, img_data["urls"]["original"], kws),
         "img_url": img_data["urls"]["original"],
+        "artwork_id": int(artwork_id),
     }
 
     print("payload")
@@ -149,36 +150,38 @@ async def get_img_data(session, artwork_id, kws):
     return payload
 
 
-async def create_payload(kws):
+async def create_payload():
     async with aiohttp.ClientSession() as session:
-        ids, kws = await get_top_ranked(session, kws)
+        ids, kws = await get_top_ranked(session, get_kws)
         payload = []
         nsfw_ids = set()
 
         async def process_artwork(i, artwork_id):
             try:
                 print(f"{i}")
-                data = await get_img_data(session, str(artwork_id), kws)
+                data = await get_img_data(session, str(artwork_id), get_kws)
                 payload.append(data)
                 print(f"appended {i}")
             except Exception:
                 nsfw_ids.add(artwork_id)
 
-        tasks = {process_artwork(i, artwork_id) for i, artwork_id in enumerate(ids)}
+        tasks = [process_artwork(i, artwork_id) for i, artwork_id in enumerate(ids)]
         await asyncio.gather(*tasks)
 
-    return payload, ids, nsfw_ids
+        sfw_ids = ids - nsfw_ids
+
+    return payload, sfw_ids, nsfw_ids
 
 
-def populate_w_ids(total_new_ids, nsfw_ids):
-    ids_params = [(id,) for id in total_new_ids - nsfw_ids]
+def populate_w_ids(sfw_ids, nsfw_ids):
+    sfw_ids_params = [(id,) for id in sfw_ids]
     cur.executemany(
         """
         INSERT
             OR IGNORE INTO artwork (id, status)
         VALUES (?, 1)
         """,
-        ids_params,
+        sfw_ids_params,
     )
     nsfw_ids_params = [(id,) for id in nsfw_ids]
     cur.executemany(
@@ -190,15 +193,15 @@ def populate_w_ids(total_new_ids, nsfw_ids):
         nsfw_ids_params,
     )
     con.commit()
-    id_set.update(total_new_ids)
+    id_set.update(sfw_ids | nsfw_ids)
 
 
-async def send_payload():
-    payload, ids, nsfw_ids = await create_payload(get_kws)
+async def main():
+    payload, sfw_ids, nsfw_ids = await create_payload()
     print(payload)
-    populate_w_ids(ids, nsfw_ids)
+    populate_w_ids(sfw_ids, nsfw_ids)
     return payload
 
 
 if __name__ == "__main__":
-    asyncio.run(send_payload())
+    asyncio.run(main())
