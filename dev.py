@@ -66,11 +66,23 @@ async def get_top_ranked(session, kws):
     return new_ids, kws
 
 
+# async def get_img(session, img_url, kws):
+#     async with session.get(
+#         img_url,
+#         headers=kws["headers"],
+#         params=kws["params"],
+#     ) as response:
+#         img_bytes = await response.read()
+#     return img_bytes
+
+
 async def get_img_data(session, artwork_id, kws):
     print("loading")
 
+    page_url = "https://www.pixiv.net/en/artworks/" + artwork_id
+
     async with session.get(
-        "https://www.pixiv.net/en/artworks/" + artwork_id,
+        page_url,
         headers=kws["headers"],
         params=kws["params"],
     ) as response:
@@ -87,25 +99,41 @@ async def get_img_data(session, artwork_id, kws):
 
     print("accessed")
 
+    # Check if flagged as sensitive by pixiv
+    if img_data["urls"]["original"] is None:
+        print(f"nsfw exception {artwork_id}")
+        raise Exception(
+            "This work cannot be displayed as it may contain sensitive content"
+        )
+
     map_table = str.maketrans(" -+/&", "_____")
     pattern = re.compile(r"\W")
-    tags = set()
+    tags = []
     for tag in img_data["tags"]["tags"]:
         if "translation" in tag and "en" in tag["translation"]:
-            tags.add(
+            tags.append(
                 "#" + pattern.sub("", tag["translation"]["en"].translate(map_table))
             )
         elif "romaji" in tag:
-            tags.add("#" + pattern.sub("", tag["romaji"].translate(map_table)))
+            tags.append("#" + pattern.sub("", tag["romaji"].translate(map_table)))
         elif "tag" in tag:
-            tags.add("#" + pattern.sub("", tag["tag"].translate(map_table)))
+            tags.append("#" + pattern.sub("", tag["tag"].translate(map_table)))
+
+    # Check if any tags are blacklisted
+    if set(tags) & blacklist:
+        print(f"nsfw tag {artwork_id}")
+        raise Exception(
+            "This work cannot be displayed as it may contain sensitive content"
+        )
 
     payload = {
-        "artwork_id": artwork_id,
         "title": img_data["title"],
+        "page_url": page_url,
         "author": img_data["userName"],
-        "author_id": img_data["userId"],
-        "tags": tags,
+        "author_url": "https://www.pixiv.net/en/users/" + img_data["userId"],
+        "tags": " ".join(tags),
+        # "img": await get_img(session, img_data["urls"]["original"], kws),
+        "img_url": img_data["urls"]["original"],
     }
 
     print("payload")
@@ -121,28 +149,6 @@ async def get_img_data(session, artwork_id, kws):
     return payload
 
 
-# async def create_payload(kws):
-#     async with aiohttp.ClientSession() as session:
-#         ids, kws = await get_top_ranked(session, kws)
-#         payload = []
-#         nsfw_ids = set()
-#         for i, artwork_id in enumerate(ids):
-#             print(i)
-#             # Skip sensitive (nsfw) content
-#             try:
-#                 data = await get_img_data(session, str(artwork_id), kws)
-#                 if data["tags"] & blacklist:
-#                     nsfw_ids.add(artwork_id)
-#                     print("nsfw tag")
-#                     continue
-#                 payload.append(data)
-#             except Exception:
-#                 print("nsfw exception")
-#                 nsfw_ids.add(artwork_id)
-#                 continue
-#     return payload, ids, nsfw_ids
-
-
 async def create_payload(kws):
     async with aiohttp.ClientSession() as session:
         ids, kws = await get_top_ranked(session, kws)
@@ -153,14 +159,9 @@ async def create_payload(kws):
             try:
                 print(f"{i}")
                 data = await get_img_data(session, str(artwork_id), kws)
-                if data["tags"] & blacklist:
-                    nsfw_ids.add(artwork_id)
-                    print("nsfw tag")
-                else:
-                    payload.append(data)
-                    print(f"appended {i}")
+                payload.append(data)
+                print(f"appended {i}")
             except Exception:
-                print(f"nsfw exception {artwork_id}")
                 nsfw_ids.add(artwork_id)
 
         tasks = {process_artwork(i, artwork_id) for i, artwork_id in enumerate(ids)}
@@ -198,28 +199,6 @@ async def send_payload():
     populate_w_ids(ids, nsfw_ids)
     return payload
 
-
-# tags_url = 'https://www.pixiv.net/en/artworks/111620869'
-
-# r = requests.get(tags_url, **kws)
-# soup = BeautifulSoup(r.text, 'lxml')
-
-# match = soup.find('meta', id='meta-preload-data')
-#
-# img_data = json.loads(match['content'])['illust']['111620869']
-
-# print(img_data)
-
-# tags = []
-# for tag in img_data['tags']['tags']:
-#    if 'translation' in tag and 'en' in tag['translation']:
-#        tags.append('#' + tag['translation']['en'].replace(' ', '_'))
-#    elif 'romaji' in tag:
-#        tags.append('#' + tag['romaji'].replace(' ', '_'))
-#    elif 'tag' in tag:
-#        tags.append('#' + tag['tag'].replace(' ', '_'))
-
-# print(tags)
 
 if __name__ == "__main__":
     asyncio.run(send_payload())
