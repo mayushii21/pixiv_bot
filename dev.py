@@ -67,6 +67,8 @@ async def get_top_ranked(session, kws):
 
 
 async def get_img_data(session, artwork_id, kws):
+    print("loading")
+
     async with session.get(
         "https://www.pixiv.net/en/artworks/" + artwork_id,
         headers=kws["headers"],
@@ -74,10 +76,16 @@ async def get_img_data(session, artwork_id, kws):
     ) as response:
         response_text = await response.text()
 
+    print("loaded, parsing")
+
     soup = BeautifulSoup(response_text, "lxml")
     match = soup.find("meta", id="meta-preload-data")
 
+    print("parsed, accessing")
+
     img_data = json.loads(match["content"])["illust"][artwork_id]
+
+    print("accessed")
 
     map_table = str.maketrans(" -+/&", "_____")
     pattern = re.compile(r"\W")
@@ -100,6 +108,8 @@ async def get_img_data(session, artwork_id, kws):
         "tags": tags,
     }
 
+    print("payload")
+
     # img_url = img_data['urls']['original']
     #    img_extension = img_url.split('.')[-1]
     #
@@ -111,25 +121,51 @@ async def get_img_data(session, artwork_id, kws):
     return payload
 
 
+# async def create_payload(kws):
+#     async with aiohttp.ClientSession() as session:
+#         ids, kws = await get_top_ranked(session, kws)
+#         payload = []
+#         nsfw_ids = set()
+#         for i, artwork_id in enumerate(ids):
+#             print(i)
+#             # Skip sensitive (nsfw) content
+#             try:
+#                 data = await get_img_data(session, str(artwork_id), kws)
+#                 if data["tags"] & blacklist:
+#                     nsfw_ids.add(artwork_id)
+#                     print("nsfw tag")
+#                     continue
+#                 payload.append(data)
+#             except Exception:
+#                 print("nsfw exception")
+#                 nsfw_ids.add(artwork_id)
+#                 continue
+#     return payload, ids, nsfw_ids
+
+
 async def create_payload(kws):
     async with aiohttp.ClientSession() as session:
         ids, kws = await get_top_ranked(session, kws)
         payload = []
         nsfw_ids = set()
-        for i, artwork_id in enumerate(ids):
-            print(i)
-            # Skip sensitive (nsfw) content
+
+        async def process_artwork(i, artwork_id):
             try:
+                print(f"{i}")
                 data = await get_img_data(session, str(artwork_id), kws)
                 if data["tags"] & blacklist:
                     nsfw_ids.add(artwork_id)
                     print("nsfw tag")
-                    continue
-                payload.append(data)
+                else:
+                    payload.append(data)
+                    print(f"appended {i}")
             except Exception:
-                print("nsfw exception")
+                print(f"nsfw exception {artwork_id}")
                 nsfw_ids.add(artwork_id)
-                continue
+
+        tasks = {process_artwork(i, artwork_id) for i, artwork_id in enumerate(ids)}
+        await asyncio.gather(*tasks)
+
     return payload, ids, nsfw_ids
 
 
