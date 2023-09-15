@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import sqlite3
 
 import aiohttp
@@ -78,17 +79,18 @@ async def get_img_data(session, id, kws):
 
     img_data = json.loads(match["content"])["illust"][id]
 
+    map_table = str.maketrans(" -+/&", "_____")
+    pattern = re.compile(r"\W")
     tags = set()
     for tag in img_data["tags"]["tags"]:
         if "translation" in tag and "en" in tag["translation"]:
             tags.add(
-                "#"
-                + tag["translation"]["en"].translate(str.maketrans(" .-()", "_____"))
+                "#" + pattern.sub("", tag["translation"]["en"].translate(map_table))
             )
         elif "romaji" in tag:
-            tags.add("#" + tag["romaji"].translate(str.maketrans(" .-()", "_____")))
+            tags.add("#" + pattern.sub("", tag["romaji"].translate(map_table)))
         elif "tag" in tag:
-            tags.add("#" + tag["tag"].translate(str.maketrans(" .-()", "_____")))
+            tags.add("#" + pattern.sub("", tag["tag"].translate(map_table)))
 
     payload = {
         "artwork_id": id,
@@ -154,8 +156,8 @@ def populate_w_ids(total_new_ids, nsfw_ids):
     id_set.update(total_new_ids)
 
 
-async def send_payload(kws):
-    payload, ids, nsfw_ids = await create_payload(kws)
+async def send_payload():
+    payload, ids, nsfw_ids = await create_payload(get_kws)
     print(payload)
     populate_w_ids(ids, nsfw_ids)
     return payload
@@ -184,4 +186,4 @@ async def send_payload(kws):
 # print(tags)
 
 if __name__ == "__main__":
-    asyncio.run(send_payload(get_kws))
+    asyncio.run(send_payload())
