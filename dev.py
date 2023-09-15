@@ -60,15 +60,15 @@ async def get_top_ranked(session, kws):
 
     # Obtain top 50 id's
     matches = soup.find_all("section", class_="ranking-item")
-    ids = {item["data-id"] for item in matches}
+    ids = {int(item["data-id"]) for item in matches}
     new_ids = ids - id_set
 
     return new_ids, kws
 
 
-async def get_img_data(session, id, kws):
+async def get_img_data(session, artwork_id, kws):
     async with session.get(
-        "https://www.pixiv.net/en/artworks/" + id,
+        "https://www.pixiv.net/en/artworks/" + artwork_id,
         headers=kws["headers"],
         params=kws["params"],
     ) as response:
@@ -77,7 +77,7 @@ async def get_img_data(session, id, kws):
     soup = BeautifulSoup(response_text, "lxml")
     match = soup.find("meta", id="meta-preload-data")
 
-    img_data = json.loads(match["content"])["illust"][id]
+    img_data = json.loads(match["content"])["illust"][artwork_id]
 
     map_table = str.maketrans(" -+/&", "_____")
     pattern = re.compile(r"\W")
@@ -93,7 +93,7 @@ async def get_img_data(session, id, kws):
             tags.add("#" + pattern.sub("", tag["tag"].translate(map_table)))
 
     payload = {
-        "artwork_id": id,
+        "artwork_id": artwork_id,
         "title": img_data["title"],
         "author": img_data["userName"],
         "author_id": img_data["userId"],
@@ -116,19 +116,19 @@ async def create_payload(kws):
         ids, kws = await get_top_ranked(session, kws)
         payload = []
         nsfw_ids = set()
-        for i, id in enumerate(ids):
+        for i, artwork_id in enumerate(ids):
             print(i)
             # Skip sensitive (nsfw) content
             try:
-                data = await get_img_data(session, id, kws)
+                data = await get_img_data(session, str(artwork_id), kws)
                 if data["tags"] & blacklist:
-                    nsfw_ids.add(id)
+                    nsfw_ids.add(artwork_id)
                     print("nsfw tag")
                     continue
                 payload.append(data)
             except Exception:
                 print("nsfw exception")
-                nsfw_ids.add(id)
+                nsfw_ids.add(artwork_id)
                 continue
     return payload, ids, nsfw_ids
 
