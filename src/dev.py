@@ -82,12 +82,15 @@ async def get_top_ranked(session, kws):
 #         params=kws["params"],
 #     ) as response:
 #         img_bytes = await response.read()
+
+#     img_extension = img_url.split('.')[-1]
+#     with open(f'{artwork_id}.{img_extension}', 'wb') as file:
+#         file.write(response.content)
+
 #     return img_bytes
 
 
 async def get_img_data(session, artwork_id, kws):
-    print("loading")
-
     page_url = "https://www.pixiv.net/en/artworks/" + artwork_id
 
     async with session.get(
@@ -97,16 +100,10 @@ async def get_img_data(session, artwork_id, kws):
     ) as response:
         response_text = await response.text()
 
-    print("loaded, parsing")
-
     soup = BeautifulSoup(response_text, "lxml")
     match = soup.find("meta", id="meta-preload-data")
 
-    print("parsed, accessing")
-
     img_data = json.loads(match["content"])["illust"][artwork_id]
-
-    print("accessed")
 
     # Check if flagged as sensitive by pixiv
     if img_data["urls"]["original"] is None:
@@ -145,16 +142,7 @@ async def get_img_data(session, artwork_id, kws):
         "img_url": img_data["urls"]["original"],
         "artwork_id": int(artwork_id),
     }
-
-    print("payload")
-
-    # img_url = img_data['urls']['original']
-    #    img_extension = img_url.split('.')[-1]
-    #
-    #    r = requests.get(img_url, **kws)
-    #
-    #    with open(f'{id}.{img_extension}', 'wb') as file:
-    #        file.write(r.content)
+    # print("payload")
 
     return payload
 
@@ -167,10 +155,9 @@ async def create_payload():
 
         async def process_artwork(i, artwork_id):
             try:
-                print(f"{i}")
+                print(f"processing {artwork_id}")
                 data = await get_img_data(session, str(artwork_id), get_kws)
                 payload.append(data)
-                print(f"appended {i}")
             except Exception:
                 nsfw_ids.add(artwork_id)
 
@@ -207,7 +194,6 @@ def populate_w_ids(sfw_ids, nsfw_ids):
 
 async def main():
     payload, sfw_ids, nsfw_ids = await create_payload()
-    print(payload)
     populate_w_ids(sfw_ids, nsfw_ids)
     return payload
 
