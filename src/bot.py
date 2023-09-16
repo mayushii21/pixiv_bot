@@ -9,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters.command import Command
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from background import keep_alive
 from dev import create_payload, populate_w_ids
 
 # Initialize the logger and load the .env file
@@ -87,4 +88,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    keep_alive()
     asyncio.run(main())
