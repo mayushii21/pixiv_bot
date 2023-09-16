@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sqlite3
+from pathlib import Path
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -15,12 +16,19 @@ headers = {
 params = {"lang": "en"}
 get_kws = {"headers": headers, "params": params}
 
+# Get the absolute path of the directory containing the script
+script_directory = Path(__file__).resolve().parent
+# Construct the absolute path to the database file
+database_path = script_directory / "pixiv_pix.db"
+# Construct the absolute path to the blacklist file
+blacklist_path = script_directory / "blacklist"
+
 # DB connection
-if os.path.exists("pixiv_pix.db"):
-    con = sqlite3.connect("pixiv_pix.db")
+if os.path.exists(database_path):
+    con = sqlite3.connect(database_path)
     cur = con.cursor()
 else:
-    con = sqlite3.connect("pixiv_pix.db")
+    con = sqlite3.connect(database_path)
     cur = con.cursor()
     cur.execute(
         """
@@ -33,9 +41,10 @@ else:
     con.commit()
 
 # Load blacklisted tags
-with open("blacklist.txt", "r", encoding="utf-8") as f:
+with open(blacklist_path, "r", encoding="utf-8") as f:
     blacklist = {line.rstrip() for line in f}
 
+# Load successfully processed id's
 id_set = {
     id[0]
     for id in cur.execute(
