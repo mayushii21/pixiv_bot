@@ -1,11 +1,11 @@
 import asyncio
-import json
 import os
 import re
 import sqlite3
 from pathlib import Path
 
 import aiohttp
+import orjson
 from bs4 import BeautifulSoup
 
 # Create necessary requests.get kwargs
@@ -103,7 +103,7 @@ async def get_img_data(session, artwork_id, kws):
     soup = BeautifulSoup(response_text, "lxml")
     match = soup.find("meta", id="meta-preload-data")
 
-    img_data = json.loads(match["content"])["illust"][artwork_id]
+    img_data = orjson.loads(match["content"])["illust"][artwork_id]
 
     # Check if flagged as sensitive by pixiv
     if img_data["urls"]["original"] is None:
