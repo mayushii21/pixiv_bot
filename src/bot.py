@@ -18,6 +18,8 @@ dotenv.load_dotenv()
 
 # Initialize Bot instance
 bot = Bot(token=os.getenv("BOT_TOKEN"), parse_mode=ParseMode.HTML)
+ADMIN_ID = os.getenv("ADMIN_ID")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 # Dispatcher
 dp = Dispatcher()
 
@@ -35,16 +37,17 @@ async def cmd_start(message: types.Message):
 
 async def send_artwork(item, url):
     await bot.send_photo(
-        os.getenv("CHANNEL_ID"),
+        CHANNEL_ID,
         photo=url,
         caption=f"<a href='{item['page_url']}'>{item['title']}</a>\nAuthor: <a href='{item['author_url']}'>{item['author']}</a>\nTags: {item['tags']}",
     )
-    await bot.send_document(os.getenv("CHANNEL_ID"), document=url)
+    await bot.send_document(CHANNEL_ID, document=url)
 
 
 # /get command in case cron fails
 @dp.message(Command("get"))
 async def send_payload(message: types.Message):
+    await bot.send_message(ADMIN_ID, "Updating...")
     payload, new_sfw_ids, nsfw_ids = await create_payload()
     sent_sfw_ids = set()
     tries = 0
@@ -60,23 +63,53 @@ async def send_payload(message: types.Message):
                 # Flood control prevention
                 await asyncio.sleep(6)
             except TelegramBadRequest:
-                pass
+                await asyncio.sleep(3)
         tries += 1
         new_sfw_ids.difference_update(sent_sfw_ids)
         # Wait between retries
         await asyncio.sleep(10)
     # Populate db and update set with processed id's
     populate_w_ids(sent_sfw_ids, nsfw_ids)
+    await bot.send_message(
+        ADMIN_ID, f"Successfully sent: {sent_sfw_ids}\nFailed to send: {new_sfw_ids}"
+    )
 
 
 async def main():
-    # Schedule the send_payload function to run daily at 12:05 noon (GMT+9)
+    # Schedule the send_payload function to run daily at 13:20-13:35 (GMT+9)
     scheduler.add_job(
         send_payload,
         "cron",
-        hour=12,  # Set the hour to 12 (noon)
-        minute=5,  # Set the minute to 5
-        second=0,  # Set the second to 0
+        hour=13,
+        minute=20,
+        second=0,
+        timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
+        args=(None,),
+    )
+    scheduler.add_job(
+        send_payload,
+        "cron",
+        hour=13,
+        minute=25,
+        second=0,
+        timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
+        args=(None,),
+    )
+    scheduler.add_job(
+        send_payload,
+        "cron",
+        hour=13,
+        minute=30,
+        second=0,
+        timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
+        args=(None,),
+    )
+    scheduler.add_job(
+        send_payload,
+        "cron",
+        hour=13,
+        minute=35,
+        second=0,
         timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
         args=(None,),
     )
