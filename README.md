@@ -1,6 +1,6 @@
 # pixiv_bot
 
-a bot to upload top ranked illustrations from pixiv to a telegram channel
+a bot to upload top ranked illustrations from [Pixiv](https://www.pixiv.net/ranking.php?mode=daily&content=illust) (a Japanese illustration community service (imageboard) for anime style art and high quality illustrations) to a telegram channel
 
 built using:
 
