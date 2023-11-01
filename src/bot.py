@@ -76,12 +76,12 @@ async def send_payload(message: types.Message):
 
 
 async def main():
-    # Schedule the send_payload function to run daily at 13:20-13:35 (GMT+9)
+    # Schedule the send_payload function to run daily at 13:15-13:35 (GMT+9)
     scheduler.add_job(
         send_payload,
         "cron",
         hour=13,
-        minute=20,
+        minute=15,
         second=0,
         timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
         args=(None,),
@@ -91,15 +91,6 @@ async def main():
         "cron",
         hour=13,
         minute=25,
-        second=0,
-        timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
-        args=(None,),
-    )
-    scheduler.add_job(
-        send_payload,
-        "cron",
-        hour=13,
-        minute=30,
         second=0,
         timezone="Asia/Tokyo",  # Set the timezone to GMT+9 (Asia/Tokyo)
         args=(None,),
