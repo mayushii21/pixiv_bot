@@ -5,12 +5,13 @@ import os
 import dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters.command import Command
+from aiogram.types import URLInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from background import keep_alive
-from dev import create_payload, populate_w_ids
+from dev import create_payload, headers, populate_w_ids
 
 # Initialize the logger and load the .env file
 logging.basicConfig(level=logging.INFO)
@@ -35,13 +36,31 @@ async def cmd_start(message: types.Message):
     )
 
 
-async def send_artwork(item, url):
+async def upload_artwork(item, url):
+    try:
+        extension = url.split(".")[-1]
+        image = URLInputFile(
+            url,
+            filename=f"{item['artwork_id']}.{extension}",
+            headers=headers,
+            timeout=60,
+        )
+    except (TelegramBadRequest, TelegramNetworkError) as e:
+        print(f"Error uploading: {e}")
+
+    return (item, image)
+
+
+async def send_artwork(item, image):
     await bot.send_photo(
         CHANNEL_ID,
-        photo=url,
+        photo=image,
         caption=f"<a href='{item['page_url']}'>{item['title']}</a>\nAuthor: <a href='{item['author_url']}'>{item['author']}</a>\nTags: {item['tags']}",
     )
-    await bot.send_document(CHANNEL_ID, document=url)
+    await bot.send_document(
+        CHANNEL_ID,
+        document=image,
+    )
 
 
 # /get command in case cron fails
@@ -51,18 +70,23 @@ async def send_payload(message: types.Message):
     payload, new_sfw_ids, nsfw_ids = await create_payload()
     sent_sfw_ids = set()
     tries = 0
-    while new_sfw_ids and tries < 3:
-        for item in payload:
-            # Skip already sent artworks
-            if item["artwork_id"] in sent_sfw_ids:
-                continue
-            url = item["img_url"]
+    while new_sfw_ids and tries < 2:
+        # Upload artworks while skipping already sent ones
+        print()
+        tasks = [
+            upload_artwork(art, art["img_url"])
+            for art in payload
+            if art["artwork_id"] not in sent_sfw_ids
+        ]
+        artworks = await asyncio.gather(*tasks)
+        for art in artworks:
             try:
-                await send_artwork(item, url)
-                sent_sfw_ids.add(item["artwork_id"])
+                await send_artwork(art[0], art[1])
+                sent_sfw_ids.add(art[0]["artwork_id"])
                 # Flood control prevention
                 await asyncio.sleep(6)
-            except TelegramBadRequest:
+            except (TelegramBadRequest, TelegramNetworkError) as e:
+                print(f"Error sending: {e}")
                 await asyncio.sleep(3)
         tries += 1
         new_sfw_ids.difference_update(sent_sfw_ids)
