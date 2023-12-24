@@ -10,9 +10,10 @@ from bs4 import BeautifulSoup
 
 # Create necessary requests.get kwargs
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
     "referer": "https://www.pixiv.net/",
 }
+
 params = {"lang": "en"}
 get_kws = {"headers": headers, "params": params}
 
@@ -75,6 +76,7 @@ async def get_top_ranked(session, kws):
     return new_ids, kws
 
 
+# # DEAL WITH THIS
 # async def get_img(session, img_url, kws):
 #     async with session.get(
 #         img_url,
@@ -82,11 +84,11 @@ async def get_top_ranked(session, kws):
 #         params=kws["params"],
 #     ) as response:
 #         img_bytes = await response.read()
-
-#     img_extension = img_url.split('.')[-1]
-#     with open(f'{artwork_id}.{img_extension}', 'wb') as file:
-#         file.write(response.content)
-
+#     # print(img_url[-16:-7])
+#     # print(img_bytes)
+#     img_extension = img_url.split(".")[-1]
+#     with open(f"{img_url[-16:-7]}.{img_extension}", "wb") as file:
+#         file.write(img_bytes)
 #     return img_bytes
 
 
@@ -132,6 +134,8 @@ async def get_img_data(session, artwork_id, kws):
             "This work cannot be displayed as it may contain sensitive content"
         )
 
+    # print(img_data["urls"])
+
     payload = {
         "title": img_data["title"],
         "page_url": page_url,
@@ -140,6 +144,7 @@ async def get_img_data(session, artwork_id, kws):
         "tags": " ".join(tags),
         # "img": await get_img(session, img_data["urls"]["original"], kws),
         "img_url": img_data["urls"]["original"],
+        # "img_url": img_data["urls"]["regular"],
         "artwork_id": int(artwork_id),
     }
     # print("payload")
@@ -194,7 +199,7 @@ def populate_w_ids(sfw_ids, nsfw_ids):
 
 async def main():
     payload, sfw_ids, nsfw_ids = await create_payload()
-    populate_w_ids(sfw_ids, nsfw_ids)
+    # populate_w_ids(sfw_ids, nsfw_ids)
     return payload
 
 
